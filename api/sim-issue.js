@@ -542,6 +542,40 @@ const simIssues = {
   }
 };
 
+/** Mock data of customer raised SIM issues */
+const customerSimIssues = [
+  {
+    custid: "CUST1001",
+    sim_issue_id: "SIM-005",
+    description: "Calls and SMS work but internet does not.",
+    status: "active"
+  },
+  {
+    custid: "CUST1002",
+    sim_issue_id: "SIM-010",
+    description: "SIM shows no service outside home country while roaming.",
+    status: "active"
+  },
+  {
+    custid: "CUST1005",
+    sim_issue_id: "SIM-003",
+    description: "Device shows 'No Service' and customer is unable to register on the network.",
+    status: "active"
+  },
+  {
+    custid: "CUST1009",
+    sim_issue_id: "SIM-006",
+    description: "Customer cannot place outgoing calls and hears a plan validity message.",
+    status: "resolved"
+  },
+  {
+    custid: "CUST1010",
+    sim_issue_id: "SIM-008",
+    description: "SMS fails to send and customer receives message sending failed error.",
+    status: "active"
+  }
+];
+
 /** discovery tools */
 const TOOLS = [
   {
@@ -579,6 +613,70 @@ const TOOLS = [
       type: "object",
       properties: {}
     }
+  },
+  {
+    name: "get_customer_sim_issues",
+    description: "Retrieve customer raised SIM issues by customer id",
+    inputSchema: {
+      type: "object",
+      properties: {
+        custid: {
+          type: "string",
+          description: "The customer id (e.g., CUST1001)"
+        }
+      },
+      required: ["custid"]
+    }
+  },
+  {
+    name: "add_customer_sim_issue",
+    description: "Add a new customer raised SIM issue",
+    inputSchema: {
+      type: "object",
+      properties: {
+        custid: {
+          type: "string",
+          description: "The customer id (e.g., CUST1001)"
+        },
+        sim_issue_id: {
+          type: "string",
+          description: "The SIM issue id from the issue catalog (e.g., SIM-005)"
+        },
+        description: {
+          type: "string",
+          description: "The customer symptom or complaint description"
+        },
+        status: {
+          type: "string",
+          enum: ["active", "resolved"],
+          description: "Current issue status"
+        }
+      },
+      required: ["custid", "sim_issue_id", "description", "status"]
+    }
+  },
+  {
+    name: "update_customer_sim_issue_status",
+    description: "Update the status of a customer raised SIM issue",
+    inputSchema: {
+      type: "object",
+      properties: {
+        custid: {
+          type: "string",
+          description: "The customer id (e.g., CUST1001)"
+        },
+        sim_issue_id: {
+          type: "string",
+          description: "The SIM issue id to update (e.g., SIM-005)"
+        },
+        status: {
+          type: "string",
+          enum: ["active", "resolved"],
+          description: "Updated issue status"
+        }
+      },
+      required: ["custid", "sim_issue_id", "status"]
+    }
   }
 ];
 
@@ -597,6 +695,63 @@ function findSimIssueByTitle(issueTitle) {
   return Object.values(simIssues).find(
     (issue) => issue.issue_title.toLowerCase() === normalizedTitle
   );
+}
+
+function normalizeCustomerIssueArgs(args) {
+  return {
+    custid: String(args.custid || "").trim().toUpperCase(),
+    sim_issue_id: String(args.sim_issue_id || "").trim().toUpperCase(),
+    description: String(args.description || "").trim(),
+    status: String(args.status || "").trim().toLowerCase()
+  };
+}
+
+function isValidStatus(status) {
+  return ["active", "resolved"].includes(status);
+}
+
+function getCustomerSimIssues(custid) {
+  const normalizedCustid = String(custid || "").trim().toUpperCase();
+  return customerSimIssues.filter((issue) => issue.custid === normalizedCustid);
+}
+
+function addCustomerSimIssue(args) {
+  const newIssue = normalizeCustomerIssueArgs(args);
+
+  if (!newIssue.custid || !newIssue.sim_issue_id || !newIssue.description || !newIssue.status) {
+    return { error: "custid, sim_issue_id, description, and status are required" };
+  }
+  if (!simIssues[newIssue.sim_issue_id]) {
+    return { error: "SIM issue id not found in catalog" };
+  }
+  if (!isValidStatus(newIssue.status)) {
+    return { error: "Status must be active or resolved" };
+  }
+
+  customerSimIssues.push(newIssue);
+  return { message: "Customer SIM issue added", issue: newIssue };
+}
+
+function updateCustomerSimIssueStatus(args) {
+  const updatedIssue = normalizeCustomerIssueArgs(args);
+
+  if (!updatedIssue.custid || !updatedIssue.sim_issue_id || !updatedIssue.status) {
+    return { error: "custid, sim_issue_id, and status are required" };
+  }
+  if (!isValidStatus(updatedIssue.status)) {
+    return { error: "Status must be active or resolved" };
+  }
+
+  const existingIssue = customerSimIssues.find(
+    (issue) => issue.custid === updatedIssue.custid && issue.sim_issue_id === updatedIssue.sim_issue_id
+  );
+
+  if (!existingIssue) {
+    return { error: "Customer SIM issue not found" };
+  }
+
+  existingIssue.status = updatedIssue.status;
+  return { message: "Customer SIM issue status updated", issue: existingIssue };
 }
 
 /** Three MCP methods using JSON RPC Messaging framework */
@@ -629,6 +784,12 @@ function handleJsonRpc(body) {
       data = simIssues[args.sim_issue_id] || { error: "SIM issue not found" };
     } else if (toolName === "get_sim_issue_by_title") {
       data = findSimIssueByTitle(args.issue_title) || { error: "SIM issue not found" };
+    } else if (toolName === "get_customer_sim_issues") {
+      data = getCustomerSimIssues(args.custid);
+    } else if (toolName === "add_customer_sim_issue") {
+      data = addCustomerSimIssue(args);
+    } else if (toolName === "update_customer_sim_issue_status") {
+      data = updateCustomerSimIssueStatus(args);
     } else {
       data = { error: "Tool not found" };
     }
@@ -655,4 +816,3 @@ export default function handler(req, res) {
   if (!req.body.id) return res.status(202).end();
   return res.json(handleJsonRpc(req.body));
 }
-
