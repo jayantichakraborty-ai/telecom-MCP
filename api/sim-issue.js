@@ -559,6 +559,20 @@ const TOOLS = [
     }
   },
   {
+    name: "get_sim_issue_by_title",
+    description: "Retrieve details for a telecom SIM issue by issue title",
+    inputSchema: {
+      type: "object",
+      properties: {
+        issue_title: {
+          type: "string",
+          description: "The SIM issue title (e.g., SIM card not detected)"
+        }
+      },
+      required: ["issue_title"]
+    }
+  },
+  {
     name: "list_sim_issues",
     description: "List all available telecom SIM issues with summary details",
     inputSchema: {
@@ -576,6 +590,13 @@ function listSimIssues() {
     severity: issue.severity,
     escalation_required: issue.escalation_required
   }));
+}
+
+function findSimIssueByTitle(issueTitle) {
+  const normalizedTitle = String(issueTitle || "").trim().toLowerCase();
+  return Object.values(simIssues).find(
+    (issue) => issue.issue_title.toLowerCase() === normalizedTitle
+  );
 }
 
 /** Three MCP methods using JSON RPC Messaging framework */
@@ -606,6 +627,8 @@ function handleJsonRpc(body) {
       data = listSimIssues();
     } else if (toolName === "get_sim_issue_details") {
       data = simIssues[args.sim_issue_id] || { error: "SIM issue not found" };
+    } else if (toolName === "get_sim_issue_by_title") {
+      data = findSimIssueByTitle(args.issue_title) || { error: "SIM issue not found" };
     } else {
       data = { error: "Tool not found" };
     }
@@ -632,3 +655,4 @@ export default function handler(req, res) {
   if (!req.body.id) return res.status(202).end();
   return res.json(handleJsonRpc(req.body));
 }
+
